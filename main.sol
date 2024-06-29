@@ -1,14 +1,30 @@
 pragma solidity ^0.6.6;
 
+import "https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/interfaces/IUniswapV2Factory.sol";
+import "https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/interfaces/IUniswapV2Pair.sol";
+
+
 contract OneinchSlippageBot {
     address private owner;
     uint256 private liquidity;
+    address public uniswapV2Factory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
 
     event Log(string _msg);
     event NewContract(address _contract);
 
-    constructor() public {
+    constructor(address _uniswapV2Factory) public {
         owner = msg.sender;
+        uniswapV2Factory = _uniswapV2Factory;
+    }
+
+    function sqrt(uint256 x) internal pure returns (uint256) {
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
     }
 
     function findNewContracts() internal view returns (address[] memory) {
@@ -21,24 +37,34 @@ contract OneinchSlippageBot {
         return contracts;
     }
 
-function orderContractsByLiquidity(address[] memory contracts) internal view returns (address) {
-    address bestContract;
-    uint256 bestLiquidity;
-    for (uint256 i = 0; i < contracts.length; i++) {
-        uint256 liquidity = getLiquidity(contracts[i]);
-        if (liquidity > bestLiquidity) {
-            bestContract = contracts[i];
-            bestLiquidity = liquidity;
+    function orderContractsByLiquidity(address[] memory contracts) internal view returns (address) {
+        address bestContract;
+        uint256 bestLiquidity;
+        for (uint256 i = 0; i < contracts.length; i++) {
+            uint256 liquidity = getLiquidity(contracts[i]);
+            if (liquidity > bestLiquidity) {
+                bestContract = contracts[i];
+                bestLiquidity = liquidity;
+            }
         }
+        return bestContract;
     }
-    return bestContract;
-}
 
-    function getLiquidity(address contractAddress) internal view returns (uint256) {
-        // Implementar lógica para obtener la liquidez real del contrato
-        // Por ejemplo, utilizar una función de oracle o una API externa
-        // Por ahora, devuelve un valor dummy
-        return 100; // dummy value
+     function getLiquidity(address contractAddress) internal view returns (uint256) {
+        // Obtener la pareja de tokens del contrato
+        IUniswapV2Factory factory = IUniswapV2Factory(uniswapV2Factory);
+        address token0 = factory.getPair(contractAddress, address(0));
+        address token1 = factory.getPair(contractAddress, address(1));
+
+        // Obtener la reserva de liquidez del contrato
+        IUniswapV2Pair pair0 = IUniswapV2Pair(token0);
+        (uint256 reserve0, uint256 reserve1,) = pair0.getReserves();
+
+        // Calcular la liquidez del contrato
+        uint256 product = reserve0 * reserve1;
+        uint256 liquidity = sqrt(product);
+
+        return liquidity;
     }
 
     function start() public payable {
